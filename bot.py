@@ -40,7 +40,7 @@ LAYOUT = [
      ["mediation-review", "mediation-records"], []),
 
     ("🔒 FAMILY MANAGEMENT", STAFF,
-     ["registration-review", "family-leaders", "family-strikes",
+     ["registration-review", "heads-of-family", "family-strikes",
       "family-records", "ticket-transcripts", "bot-logs"], []),
 
     ("📁 PRIVATE TICKETS", SUPPORT_STAFF, [], []),
@@ -63,7 +63,7 @@ ICONS = {
     "family-mediation": "⚖️", "head-of-family-chat": "💎",
     "roster-requests": "👥", "family-updates": "📝",
     "mediation-review": "🤝", "mediation-records": "🗃️",
-    "registration-review": "📋", "family-leaders": "👑",
+    "registration-review": "📋", "heads-of-family": "👑",
     "family-strikes": "⚠️", "family-records": "🗂️",
     "ticket-transcripts": "📄", "bot-logs": "🤖",
 }
@@ -159,6 +159,16 @@ def is_mediator(member):
     return is_council(member) or any(
         base_name(r.name) in MEDIATORS for r in member.roles
     )
+
+
+async def add_family_record(guild, title, details):
+    """Post a permanent chronological family action record."""
+    ch = channel(guild, "family-records")
+    if not ch:
+        return
+    e = discord.Embed(title=title, description=details, color=ACCENT)
+    e.timestamp = discord.utils.utcnow()
+    await ch.send(embed=e)
 
 
 async def refresh_directory(guild):
@@ -681,7 +691,17 @@ async def approve_family(
         await refresh_directory(i.guild)
         await refresh_leaderboard(i.guild)
 
-        leaders = channel(i.guild, "family-leaders")
+        await add_family_record(
+            i.guild,
+            "✅ FAMILY APPROVED",
+            f"**Family:** {family_name}\n"
+            f"**Head of Family:** {head.mention}\n"
+            f"**Co-Head/Second:** {coleader}\n"
+            f"**Approved by:** {i.user.mention}\n"
+            f"**Recruiting:** {recruiting}"
+        )
+
+        leaders = channel(i.guild, "heads-of-family")
         if leaders:
             await leaders.send(
                 f"✅ **{family_name}** approved.\n"
@@ -732,6 +752,11 @@ async def add_family_member(i, member: discord.Member, family_name: str):
             (i.guild.id, family_name, member.id),
         )
 
+    await add_family_record(
+        i.guild,
+        "➕ FAMILY MEMBER ADDED",
+        f"**Family:** {family_name}\n**Member:** {member.mention}\n**Added by:** {i.user.mention}"
+    )
     await i.response.send_message(
         f"✅ {member.mention} added to **{family_name}**.", ephemeral=True
     )
@@ -776,6 +801,11 @@ async def remove_family_member(i, member: discord.Member, family_name: str):
             (i.guild.id, family_name, member.id),
         )
 
+    await add_family_record(
+        i.guild,
+        "➖ FAMILY MEMBER REMOVED",
+        f"**Family:** {family_name}\n**Member:** {member.mention}\n**Removed by:** {i.user.mention}"
+    )
     await i.response.send_message(
         f"✅ {member.mention} removed from **{family_name}**.", ephemeral=True
     )
@@ -880,6 +910,13 @@ async def family_strike(i, family_name: str, reason: str):
             (i.guild.id, fam[0]),
         ).fetchone()[0]
 
+    await add_family_record(
+        i.guild,
+        "⚠️ FAMILY STRIKE",
+        f"**Family:** {fam[0]}\n**Strike #:** {count}\n"
+        f"**Issued by:** {i.user.mention}\n**Reason:** {reason}"
+    )
+
     log = channel(i.guild, "family-strikes")
     if log:
         await log.send(
@@ -938,13 +975,13 @@ async def disband_family(i, family_name: str, reason: str):
     await refresh_directory(i.guild)
     await refresh_leaderboard(i.guild)
 
-    records = channel(i.guild, "family-records")
-    if records:
-        await records.send(
-            f"🛑 **{fam[0]}** official family status removed by {i.user.mention}.\n"
-            f"Reason: {reason}\n"
-            f"The family role was left in the server for manual review/deletion."
-        )
+    await add_family_record(
+        i.guild,
+        "🛑 FAMILY DISBANDED",
+        f"**Family:** {fam[0]}\n**Removed by:** {i.user.mention}\n"
+        f"**Reason:** {reason}\n"
+        f"The family role/private channels were left for manual review."
+    )
 
     await i.followup.send(
         f"🛑 **{fam[0]}** marked disbanded. Member access roles were removed. "
